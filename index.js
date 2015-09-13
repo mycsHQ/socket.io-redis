@@ -74,7 +74,7 @@ function adapter(uri, opts){
     // Decoder to internally decode namespace messages and
     // emit related event (namespace is an EventEmitter)
     this.decoder = new parser.Decoder();
-    this.decoder.on('decoded', this.ondecoded);
+    this.decoder.on('decoded', this.emitLocally);
 
     var self = this;
     sub.subscribe(prefix + '#' + nsp.name + '#', function(err){
@@ -128,12 +128,7 @@ function adapter(uri, opts){
   Redis.prototype.broadcast = function(packet, opts, remote){
     Adapter.prototype.broadcast.call(this, packet, opts);
 
-    // attempt to decode and have the namespace emitting the decoded message
-    try {
-      this.decoder.add(data);
-    } catch(e) {
-      this.emit('error', e);
-    }
+    this.emitLocally(packet);
 
     if (!remote) {
       if (opts.rooms) {
@@ -156,11 +151,11 @@ function adapter(uri, opts){
    * @api private
    */
 
-  Redis.prototype.ondecoded = function(packet) {
+  Redis.prototype.emitLocally = function(packet) {
     if(packet.type == parser.EVENT || packet.type == parser.BINARY_EVENT){
       var args = packet.data || [];
       debug('emitting event %j', args);
-      this.nsp.emit.apply(this, args);
+      new Emitter().emit.apply(this.nsp, args);
     }
   };
 
