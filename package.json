@@ -15,6 +15,7 @@
     "msgpack-js": "0.3.0",
     "redis": "0.10.1",
     "socket.io-adapter": "automattic/socket.io-adapter#de5cba",
+    "socket.io-parser": "^2.2.4",
     "uid2": "0.0.3"
   },
   "devDependencies": {

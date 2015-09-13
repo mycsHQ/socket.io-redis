@@ -10,6 +10,7 @@ var Adapter = require('socket.io-adapter');
 var Emitter = require('events').EventEmitter;
 var debug = require('debug')('socket.io-redis');
 var async = require('async');
+var parser = require('socket.io-parser');
 
 /**
  * Module exports.
@@ -70,6 +71,11 @@ function adapter(uri, opts){
     this.pubClient = pub;
     this.subClient = sub;
 
+    // Decoder to internally decode namespace messages and
+    // emit related event (namespace is an EventEmitter)
+    this.decoder = new parser.Decoder();
+    this.decoder.on('decoded', this.ondecoded);
+
     var self = this;
     sub.subscribe(prefix + '#' + nsp.name + '#', function(err){
       if (err) self.emit('error', err);
@@ -93,7 +99,7 @@ function adapter(uri, opts){
     var args = msgpack.decode(msg);
     var packet;
 
-    if (uid == args.shift()) return debug('ignore same uid');
+    if (uid !== args.shift()) return debug('ignore because of different uid');
 
     packet = args[0];
 
@@ -121,6 +127,14 @@ function adapter(uri, opts){
 
   Redis.prototype.broadcast = function(packet, opts, remote){
     Adapter.prototype.broadcast.call(this, packet, opts);
+
+    // attempt to decode and have the namespace emitting the decoded message
+    try {
+      this.decoder.add(data);
+    } catch(e) {
+      this.emit('error', e);
+    }
+
     if (!remote) {
       if (opts.rooms) {
         opts.rooms.forEach(function(room) {
@@ -133,6 +147,20 @@ function adapter(uri, opts){
         var msg = msgpack.encode([uid, packet, opts]);
         pub.publish(chn, msg);
       }
+    }
+  };
+
+  /**
+   * Called to emit the decoded packet
+   *
+   * @api private
+   */
+
+  Redis.prototype.ondecoded = function(packet) {
+    if(packet.type == parser.EVENT || packet.type == parser.BINARY_EVENT){
+      var args = packet.data || [];
+      debug('emitting event %j', args);
+      this.nsp.emit.apply(this, args);
     }
   };
 
